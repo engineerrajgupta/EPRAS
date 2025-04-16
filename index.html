@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page Replacement Simulator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #1e1e2f;
+      color: white;
+      margin: 0;
+      padding: 20px;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Background animation */
+    @keyframes backgroundAnimation {
+      0% { background-position: 0 0; }
+      100% { background-position: 100% 100%; }
+    }
+
+    .background-animation {
+      background: linear-gradient(45deg, #fca311, #5e60ce, #00b4d8);
+      background-size: 400% 400%;
+      animation: backgroundAnimation 15s ease infinite;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    label, select, input {
+      display: block;
+      margin: 10px 0;
+    }
+
+    select, input {
+      padding: 8px;
+      width: 100%;
+    }
+
+    button {
+      background-color: #5e60ce;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+
+
+
+    button:hover {
+      background-color: #7b7efb;
+    }
+
+    canvas {
+      background-color: #27293d;
+      margin-top: 20px;
+    }
+
+    /* Footer section */
+    footer {
+      background-color: #1e1e2f;
+      padding: 30px 0;
+      text-align: center;
+      color: white;
+      margin-top: 40px;
+      border-top: 2px solid #5e60ce;
+      z-index: 1;
+    }
+
+    #reset{
+        background-color: #5e60ce;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      cursor: pointer;
+      margin-right: 10px;
+      text-decoration: none;
+    }
+
+    footer h3 {
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+
+    .profiles {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 20px;
+    }
+
+    .profile {
+      background-color: #27293d;
+      padding: 20px;
+      border-radius: 8px;
+      width: 150px;
+      text-align: center;
+    }
+
+    .profile h4 {
+      font-size: 16px;
+      margin-bottom: 5px;
+    }
+
+    .profile p {
+      font-size: 14px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <div class="background-animation"></div>
+
+  <div class="container">
+    <h1>Page Replacement Simulator</h1>
+    <label for="algo">Select Algorithm:</label>
+    <select id="algo">
+      <option value="FIFO">FIFO</option>
+      <option value="LRU">LRU</option>
+      <option value="Optimal">Optimal</option>
+    </select>
+
+    <label for="frames">Number of Frames:</label>
+    <input type="number" id="frames" value="3" min="1" max="10" />
+
+    <label for="pages">Page References (comma-separated):</label>
+    <input type="text" id="pages" value="0,1,2,0,3,0,4,2,3,0" />
+
+    <label for="delay">Animation Delay (ms):</label>
+    <input type="number" id="delay" value="3000" min="1000" max="10000" />
+
+    <button onclick="runSimulation()">Run Simulation</button>
+    <button onclick="resetSimulation()">Reset</button>
+    <a href="index.html" id="reset">Refresh</a>
+    <button onclick="pauseAnimation()">Pause</button>
+    <button onclick="resumeAnimation()">Resume</button>
+
+    <p id="faults">Page Faults: 0</p>
+    <p id="hits">Page Hits: 0</p>
+    <canvas id="pageChart" width="800" height="400"></canvas>
+  </div>
+
+  <footer>
+    <h3>Created By</h3>
+    <div class="profiles">
+      <div class="profile">
+        <h4>Raj Gupta</h4>
+        <p>Reg. No.: 12313184</p>
+      </div>
+      <div class="profile">
+        <h4>Sahil Bhardwaj</h4>
+        <p>Reg. No.: 12314196</p>
+      </div>
+      <div class="profile">
+        <h4>Kunal Dhangar</h4>
+        <p>Reg. No.: 12317522</p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    let chart = null;
+    let history = [];
+    let pages = [];
+    let frameCount = 3;
+    let faultFlags = [];
+    let hitCount = 0;
+    let isPaused = false;
+    let animationResolve;
+    let animationDelay = 3000;
+
+    function parsePages() {
+      return document.getElementById("pages").value.split(",").map(p => parseInt(p.trim()));
+    }
+
+    function fifoAlgorithm(pages, frames) {
+      let queue = [];
+      let pageFaults = 0;
+      hitCount = 0;
+      history = [];
+      faultFlags = [];
+
+      for (const page of pages) {
+        let fault = false;
+        if (!queue.includes(page)) {
+          if (queue.length < frames) {
+            queue.push(page);
+          } else {
+            queue.shift();
+            queue.push(page);
+          }
+          pageFaults++;
+          fault = true;
+        } else {
+          hitCount++;
+        }
+        history.push([...queue]);
+        faultFlags.push(fault);
+      }
+      return pageFaults;
+    }
+
+    function lruAlgorithm(pages, frames) {
+      let queue = [];
+      let recent = {};
+      let pageFaults = 0;
+      hitCount = 0;
+      history = [];
+      faultFlags = [];
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        let fault = false;
+        if (queue.includes(page)) {
+          recent[page] = i;
+          hitCount++;
+        } else {
+          if (queue.length < frames) {
+            queue.push(page);
+          } else {
+            const lru = queue.reduce((a, b) => (recent[a] < recent[b] ? a : b));
+            queue[queue.indexOf(lru)] = page;
+          }
+          recent[page] = i;
+          pageFaults++;
+          fault = true;
+        }
+        history.push([...queue]);
+        faultFlags.push(fault);
+      }
+      return pageFaults;
+    }
+
+    function optimalAlgorithm(pages, frames) {
+      let queue = [];
+      let pageFaults = 0;
+      hitCount = 0;
+      history = [];
+      faultFlags = [];
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        let fault = false;
+        if (!queue.includes(page)) {
+          if (queue.length < frames) {
+            queue.push(page);
+          } else {
+            const future = pages.slice(i + 1);
+            const indices = queue.map(p => future.indexOf(p) !== -1 ? future.indexOf(p) : Infinity);
+            const farthest = indices.indexOf(Math.max(...indices));
+            queue[farthest] = page;
+          }
+          pageFaults++;
+          fault = true;
+        } else {
+          hitCount++;
+        }
+        history.push([...queue]);
+        faultFlags.push(fault);
+      }
+      return pageFaults;
+    }
+
+    async function animateChart() {
+      let i = 0;
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById("pageChart"), {
+        type: 'bar',
+        data: {
+          labels: Array.from({length: frameCount}, (_, i) => `Frame ${i+1}`),
+          datasets: [{
+            label: 'Page Number',
+            data: Array(frameCount).fill(' '),
+            backgroundColor: Array(frameCount).fill('#5e60ce')
+          }]
+        },
+        options: {
+          animation: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              min: 0,
+              max: Math.max(...pages, 1) + 1,
+              ticks: {
+                stepSize: 1,
+                color: 'white',
+                callback: function(value) {
+                  return value;
+                }
+              },
+              grid: { color: '#444' }
+            },
+            x: {
+              ticks: { color: 'white' },
+              grid: { color: '#444' }
+            }
+          },
+          plugins: {
+            legend: { labels: { color: 'white' } },
+            title: {
+              display: true,
+              text: 'Page Replacement Visualization',
+              color: 'white',
+              font: { size: 18 }
+            }
+          }
+        }
+      });
+
+      while (i < history.length) {
+        if (isPaused) {
+          await new Promise(resolve => animationResolve = resolve);
+        }
+
+        let displayPages = history[i].map(val => (typeof val === 'number' && val >= 0) ? val : ' ');
+        chart.data.datasets[0].data = displayPages;
+        chart.data.datasets[0].backgroundColor = displayPages.map(() => faultFlags[i] ? '#f25c54' : '#5e60ce');
+        chart.update();
+        await new Promise(resolve => setTimeout(resolve, animationDelay));
+        i++;
+      }
+    }
+
+    function runSimulation() {
+      pages = parsePages();
+      frameCount = parseInt(document.getElementById("frames").value);
+      animationDelay = parseInt(document.getElementById("delay").value);
+      const algo = document.getElementById("algo").value;
+      let faults = 0;
+
+      if (algo === "FIFO") faults = fifoAlgorithm(pages, frameCount);
+      else if (algo === "LRU") faults = lruAlgorithm(pages, frameCount);
+      else if (algo === "Optimal") faults = optimalAlgorithm(pages, frameCount);
+
+      document.getElementById("faults").innerText = `Page Faults: ${faults}`;
+      document.getElementById("hits").innerText = `Page Hits: ${hitCount}`;
+      animateChart();
+    }
+
+    function resetSimulation() {
+      if (chart) chart.destroy();
+      history = [];
+      faultFlags = [];
+      document.getElementById("faults").innerText = "Page Faults: 0";
+      document.getElementById("hits").innerText = "Page Hits: 0";
+    }
+
+    function pauseAnimation() {
+      isPaused = true;
+    }
+
+    function resumeAnimation() {
+      if (isPaused && animationResolve) {
+        isPaused = false;
+        animationResolve();
+      }
+    }
+  </script>
+</body>
+</html>
